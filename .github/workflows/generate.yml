@@ -1,120 +1,48 @@
-# =====================================================
-# GitHub Actions Workflow: Generate Go code from .proto
-# =====================================================
-# Этот workflow запускается вручную (workflow_dispatch).
-# Он клонирует Proto-репозиторий, генерирует .pb.go файлы
-# и пушит результат в ЭТОТ репозиторий (Generated).
-# =====================================================
-
-name: Generate Proto Go Code
+name: Generate Go Code
 
 on:
-  workflow_dispatch:  # Ручной запуск из GitHub UI
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   generate:
     runs-on: ubuntu-latest
-
     steps:
-      # 1. Чекаутим ЭТОТ (Generated) репозиторий
-      - name: Checkout Generated Repo
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/checkout@v4
 
-      # 2. Устанавливаем Go
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.22'
 
-      # 3. Устанавливаем protoc
-      - name: Install protoc
+      - name: Install Protoc & Plugins
         run: |
-          sudo apt-get update
-          sudo apt-get install -y unzip
-          PROTOC_VERSION=25.1
-          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip"
-          unzip "protoc-${PROTOC_VERSION}-linux-x86_64.zip" -d /usr/local
-          protoc --version
-
-      # 4. Устанавливаем Go-плагины для protoc
-      - name: Install protoc-gen-go plugins
-        run: |
+          sudo apt-get install -y protobuf-compiler
           go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
           go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
-          echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      # 5. Клонируем Proto-репозиторий
-      - name: Clone Proto Repository
+      - name: Generate Code
         run: |
-          git clone https://github.com/${{ github.repository_owner }}/ap2-proto.git /tmp/protos
-
-      # 6. Генерируем Go-код из .proto файлов
-      - name: Generate Go code
-        run: |
-          # Очищаем старый сгенерированный код
-          rm -rf payment/ order/
-
-          # Генерируем для payment.proto
-          mkdir -p payment
-          protoc \
-            --proto_path=/tmp/protos \
-            --go_out=. \
-            --go_opt=paths=source_relative \
-            --go-grpc_out=. \
-            --go-grpc_opt=paths=source_relative \
+          # Генерация для payment
+          protoc --proto_path=. \
+            --go_out=. --go_opt=paths=source_relative \
+            --go-grpc_out=. --go-grpc_opt=paths=source_relative \
             payment/payment.proto
-
-          # Генерируем для order.proto
-          mkdir -p order
-          protoc \
-            --proto_path=/tmp/protos \
-            --go_out=. \
-            --go_opt=paths=source_relative \
-            --go-grpc_out=. \
-            --go-grpc_opt=paths=source_relative \
+          
+          # Генерация для order
+          protoc --proto_path=. \
+            --go_out=. --go_opt=paths=source_relative \
+            --go-grpc_out=. --go-grpc_opt=paths=source_relative \
             order/order.proto
 
-          echo "✅ Generated files:"
-          find . -name "*.pb.go" -o -name "*_grpc.pb.go" | sort
-
-      # 7. Инициализируем go.mod если нужно
-      - name: Setup go.mod
+      - name: Push Generated Files
         run: |
-          if [ ! -f go.mod ]; then
-            go mod init github.com/${{ github.repository_owner }}/ap2-proto-generated
-          fi
-          go mod tidy
-
-      # 8. Коммитим и пушим сгенерированный код
-      - name: Commit and Push
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add -A
-          if git diff --staged --quiet; then
-            echo "No changes to commit"
-          else
-            git commit -m "chore: auto-generate Go code from proto files"
-            git push
-          fi
-
-      # 9. Создаём тег для версионирования
-      - name: Create Release Tag
-        run: |
-          # Определяем следующую версию
-          LATEST_TAG=$(git tag --sort=-v:refname | head -1)
-          if [ -z "$LATEST_TAG" ]; then
-            NEW_TAG="v1.0.0"
-          else
-            # Инкрементируем patch версию
-            MAJOR=$(echo $LATEST_TAG | cut -d. -f1)
-            MINOR=$(echo $LATEST_TAG | cut -d. -f2)
-            PATCH=$(echo $LATEST_TAG | cut -d. -f3)
-            NEW_PATCH=$((PATCH + 1))
-            NEW_TAG="${MAJOR}.${MINOR}.${NEW_PATCH}"
-          fi
-          echo "Creating tag: $NEW_TAG"
-          git tag $NEW_TAG
-          git push origin $NEW_TAG
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add .
+          git commit -m "Auto-generate gRPC code" || echo "Nothing to commit"
+          git push
