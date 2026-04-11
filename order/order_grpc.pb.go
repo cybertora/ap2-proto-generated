@@ -25,14 +25,7 @@ const (
 // OrderServiceClient is the client API for OrderService service.
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
-//
-// OrderService — сервис стриминга обновлений заказов.
-// Order Service выступает gRPC-сервером для стриминга.
 type OrderServiceClient interface {
-	// SubscribeToOrderUpdates — Server-side Streaming RPC.
-	// Клиент подписывается на обновления статуса конкретного заказа.
-	// Стрим отправляет обновления в реальном времени при изменении
-	// статуса заказа в базе данных (PostgreSQL LISTEN/NOTIFY).
 	SubscribeToOrderUpdates(ctx context.Context, in *OrderRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[OrderStatusUpdate], error)
 }
 
@@ -66,14 +59,7 @@ type OrderService_SubscribeToOrderUpdatesClient = grpc.ServerStreamingClient[Ord
 // OrderServiceServer is the server API for OrderService service.
 // All implementations must embed UnimplementedOrderServiceServer
 // for forward compatibility.
-//
-// OrderService — сервис стриминга обновлений заказов.
-// Order Service выступает gRPC-сервером для стриминга.
 type OrderServiceServer interface {
-	// SubscribeToOrderUpdates — Server-side Streaming RPC.
-	// Клиент подписывается на обновления статуса конкретного заказа.
-	// Стрим отправляет обновления в реальном времени при изменении
-	// статуса заказа в базе данных (PostgreSQL LISTEN/NOTIFY).
 	SubscribeToOrderUpdates(*OrderRequest, grpc.ServerStreamingServer[OrderStatusUpdate]) error
 	mustEmbedUnimplementedOrderServiceServer()
 }
